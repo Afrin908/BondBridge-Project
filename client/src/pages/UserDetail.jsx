@@ -1,128 +1,145 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import API from '../utils/axios';
 
-const INFO = [
-  { key:'age',           label:'Age',            fmt: v=>v?`${v} years`:'—' },
-  { key:'gender',        label:'Gender' },
-  { key:'religion',      label:'Religion' },
-  { key:'location',      label:'Location' },
-  { key:'maritalStatus', label:'Marital Status' },
-  { key:'education',     label:'Education' },
-  { key:'university',    label:'University / College' },
-  { key:'profession',    label:'Profession' },
-];
+const initials = (name) => (name || 'BB').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+const verified = (u) => u?.verificationStatus === 'verified' || u?.isVerified;
 
 export default function UserDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user: me } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [reqStatus, setReqStatus] = useState(null);
-  const [reqLoading, setReqLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [message, setMessage] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+const [reportReason, setReportReason] = useState('Fake Profile');
+  const [reportDetails, setReportDetails] = useState('');
 
   useEffect(() => {
-    API.get(`/users/${id}`)
-      .then(r => { setProfile(r.data); setLoading(false); })
-      .catch(() => { setLoading(false); navigate('/search'); });
-    API.get('/match/sent').then(r => {
-      const found = r.data.find(m => m.receiver._id===id || m.receiver===id);
-      if (found) setReqStatus(found.status);
-    }).catch(()=>{});
-    // Also check incoming (they may have sent to me)
-    API.get('/match/connections').then(r => {
-      const conn = r.data.find(c => c.user._id===id);
-      if (conn) setReqStatus('accepted');
-    }).catch(()=>{});
+    async function load() {
+      setLoading(true);
+      try {
+        const [{ data: userData }, sentRes, connRes] = await Promise.all([
+          API.get(`/users/${id}`),
+          API.get('/match/sent').catch(() => ({ data: [] })),
+          API.get('/match/connections').catch(() => ({ data: [] })),
+        ]);
+        setProfile(userData.user || userData);
+        const sentList = Array.isArray(sentRes.data) ? sentRes.data : sentRes.data.sent || sentRes.data.requests || [];
+        const connList = Array.isArray(connRes.data) ? connRes.data : connRes.data.connections || [];
+        setSent(sentList.some((r) => (r.receiver?._id || r.receiver || r.user?._id) === id));
+        setConnected(connList.some((c) => (c.user?._id || c._id) === id));
+      } catch {
+        setProfile(null);
+      } finally { setLoading(false); }
+    }
+    load();
   }, [id]);
 
-  const sendRequest = async () => {
-    setReqLoading(true);
+  const requestConnect = async () => {
     try {
       await API.post('/match/request', { receiverId: id });
-      setReqStatus('pending');
-    } catch (err) { alert(err.response?.data?.message||'Failed'); }
-    finally { setReqLoading(false); }
+      setSent(true);
+      setMessage('Professional connection request sent.');
+    } catch (err) { setMessage(err.response?.data?.message || 'Connection request could not be sent.'); }
   };
 
-  if (loading) return <div className="spinner" style={{marginTop:'3rem'}}></div>;
-  if (!profile) return null;
-
-  const initials = (profile.name||'?').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
-  const isSelf = me?._id === id;
-
-  const ActionBtn = () => {
-    if (isSelf)            return <button className="btn btn-ghost" onClick={() => navigate('/profile')}>✏️  Edit My Profile</button>;
-    if (reqStatus==='pending')  return <button className="btn btn-ghost" disabled>⏳ Request Pending</button>;
-    if (reqStatus==='accepted') return <button className="btn btn-primary" onClick={() => navigate(`/chat?with=${id}`)}>💬 Message</button>;
-    if (reqStatus==='rejected') return <button className="btn btn-ghost" disabled>Request Rejected</button>;
-    return <button className="btn btn-primary" onClick={sendRequest} disabled={reqLoading}>{reqLoading?'Sending...':'💌 Send Match Request'}</button>;
+  const blockUser = async () => {
+    if (!window.confirm('Block this profile from contacting you?')) return;
+    try { await API.post(`/blocks/${id}`); setMessage('Profile blocked.'); }
+    catch (err) { setMessage(err.response?.data?.message || 'Could not block this profile.'); }
   };
+
+  const submitReport = async (e) => {
+    e.preventDefault();
+    try {
+      await API.post('/reports', { reportedUser: id, reason: reportReason, details: reportDetails });
+      setReportOpen(false); setReportDetails(''); setMessage('Report submitted to Trust & Safety.');
+    } catch (err) { setMessage(err.response?.data?.message || 'Report could not be submitted.'); }
+  };
+
+  if (loading) return <main className="page-wrapper container"><div className="spinner spinner-lg" style={{ marginTop: 80 }} /></main>;
+  if (!profile) return <main className="page-wrapper container"><div className="empty-state card"><h1 className="heading-sm">Profile unavailable</h1><Link className="btn btn-primary" to="/search">Back to discovery</Link></div></main>;
+
+  const skills = [...(profile.skills || []), ...(profile.expertiseAreas || []), ...(profile.interests || [])].filter(Boolean);
+  const fit = typeof profile.compatibilityScore === 'number' ? profile.compatibilityScore : null;
 
   return (
-    <div className="page">
-      <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)} style={{marginBottom:'1.25rem'}}>← Back to Search</button>
+    <main className="page-wrapper container animate-fade-up">
+      {message && <div className="alert alert-warning" style={{ marginBottom: 20 }}>{message}</div>}
 
-      <div className="profile-detail">
-        {/* LEFT */}
-        <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
-          <div className="profile-avatar-lg">
-            {profile.photo
-              ? <img src={profile.photo} alt={profile.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              : <span>{initials}</span>
-            }
+      <section className="card" style={{ padding: 32, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 24, alignItems: 'center' }}>
+          <div className="avatar avatar-2xl">{profile.photo ? <img src={profile.photo} alt={profile.name} /> : initials(profile.name)}</div>
+          <div>
+            <span className="section-label">Verified professional profile</span>
+            <h1 className="heading-lg">{profile.name}</h1>
+            <p className="body-md">{[profile.roleTitle || profile.profession || profile.occupation, profile.department, profile.organization, profile.location].filter(Boolean).join(' · ')}</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {verified(profile) ? <span className="tag tag-verified">Verified identity</span> : <span className="tag tag-warning">Verification pending</span>}
+              {profile.userType && <span className="tag tag-accent">{profile.userType}</span>}
+              {profile.availabilityStatus && <span className="tag">{profile.availabilityStatus}</span>}
+              {fit !== null && <span className="tag tag-accent">{fit}% collaboration fit</span>}
+            </div>
           </div>
-          <div className="card" style={{textAlign:'center'}}>
-            <div style={{fontFamily:'var(--font-serif)',fontSize:22,fontWeight:700,color:'var(--navy)',marginBottom:4}}>{profile.name}</div>
-            {profile.isVerified && <div style={{fontSize:12,color:'var(--teal-dark)',fontWeight:600,marginBottom:10}}>✓ Verified Profile</div>}
-            {profile.bio && <p style={{fontSize:13.5,color:'var(--gray)',lineHeight:1.65,marginBottom:'1rem',textAlign:'left'}}>{profile.bio}</p>}
-            <ActionBtn/>
+          <div style={{ display: 'flex', gap: 10, flexDirection: 'column', minWidth: 190 }}>
+            {connected ? <button className="btn btn-primary" onClick={() => navigate(`/chat?with=${profile._id}`)}>Secure message</button> : sent ? <button className="btn btn-secondary" disabled>Request sent</button> : <button className="btn btn-primary" onClick={requestConnect}>Connect professionally</button>}
+            <button className="btn btn-secondary" onClick={() => setReportOpen((v) => !v)}>Report concern</button>
+            <button className="btn btn-danger" onClick={blockUser}>Block profile</button>
           </div>
         </div>
+      </section>
 
-        {/* RIGHT */}
-        <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
-          <div className="card">
-            <div style={{fontFamily:'var(--font-serif)',fontSize:20,fontWeight:600,color:'var(--navy)',marginBottom:'1rem',paddingBottom:'0.6rem',borderBottom:'1px solid var(--border)'}}>Profile Details</div>
-            <div className="profile-info-grid">
-              {INFO.map(row => (
-                <div className="profile-info-item" key={row.key}>
-                  <div className="profile-info-label">{row.label}</div>
-                  <div className="profile-info-val">{row.fmt ? row.fmt(profile[row.key]) : (profile[row.key]||'—')}</div>
-                </div>
-              ))}
-            </div>
+      {reportOpen && (
+        <form className="card" onSubmit={submitReport} style={{ padding: 24, marginBottom: 24 }}>
+          <h2 className="heading-sm">Submit Trust & Safety report</h2>
+          <p className="body-sm" style={{ marginBottom: 16 }}>Use this only for workplace communication, identity, or platform conduct concerns.</p>
+          <div style={{ display: 'grid', gap: 12 }}>
+<select
+  value={reportReason}
+  onChange={(e) => setReportReason(e.target.value)}
+>
+  <option value="Fake Profile">Fake Profile</option>
+  <option value="Harassment">Harassment</option>
+  <option value="Inappropriate Content">Inappropriate Content</option>
+  <option value="Spam">Spam / Promotional Abuse</option>
+  <option value="Scam or Fraud">Scam or Fraud</option>
+  <option value="Professional conduct concern">
+    Professional Conduct Concern
+  </option>
+  <option value="Identity verification concern">
+    Identity Verification Concern
+  </option>
+  <option value="Unsafe communication">
+    Unsafe Communication
+  </option>
+  <option value="Scammer">
+    Scammer / Financial Manipulation
+  </option>
+  <option value="Other">Other</option>
+</select>
+            <textarea className="form-textarea" value={reportDetails} onChange={(e) => setReportDetails(e.target.value)} placeholder="Add clear details for admin review." />
+            <button className="btn btn-primary" type="submit">Submit report</button>
           </div>
+        </form>
+      )}
 
-          {/* Compatibility */}
-          <div className="card">
-            <div style={{fontFamily:'var(--font-serif)',fontSize:18,fontWeight:600,color:'var(--navy)',marginBottom:'0.75rem'}}>Compatibility Rating</div>
-            <p style={{fontSize:13,color:'var(--gray)',marginBottom:'0.75rem'}}>Profile alignment based on shared values, location, and background.</p>
-            <div style={{background:'var(--bg)',borderRadius:'var(--radius-sm)',padding:14}}>
-              <div style={{height:12,borderRadius:6,background:'linear-gradient(90deg,#E24B4A,#EF9F27,#EACC1A,#639922,#6AAEB4)',position:'relative',marginBottom:8}}>
-                <div style={{position:'absolute',top:-5,left:'65%',width:3,height:22,background:'#6AAEB4',borderRadius:2,boxShadow:'0 0 0 3px rgba(106,174,180,0.15)'}}></div>
-              </div>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--gray)'}}>
-                <span>Ingredient</span><span>Culinary</span><span>Premium</span><span style={{color:'#6AAEB4',fontWeight:700}}>Ceremonial</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tags */}
-          {(profile.education||profile.profession||profile.university) && (
-            <div className="card">
-              <div style={{fontFamily:'var(--font-serif)',fontSize:18,fontWeight:600,color:'var(--navy)',marginBottom:'0.75rem'}}>Background</div>
-              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-                {profile.education   && <span className="tag">{profile.education}</span>}
-                {profile.profession  && <span className="tag tag-blue">{profile.profession}</span>}
-                {profile.university  && <span className="tag tag-gray">{profile.university}</span>}
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="grid-2">
+        <InfoCard title="Professional summary"><p className="body-md">{profile.bio || 'No professional summary added yet.'}</p></InfoCard>
+        <InfoCard title="Organization context">
+          <Data label="Organization" value={profile.organization} /><Data label="Department" value={profile.department} /><Data label="Role" value={profile.roleTitle || profile.profession || profile.occupation} /><Data label="Work mode" value={profile.workMode} />
+        </InfoCard>
+        <InfoCard title="Skills & expertise"><TagList items={skills} empty="No skills listed." /></InfoCard>
+        <InfoCard title="Collaboration goals"><TagList items={profile.collaborationGoals || []} empty="No collaboration goals listed." /></InfoCard>
+        <InfoCard title="Communication preferences"><TagList items={profile.communicationPreferences || []} empty="No communication preference listed." /></InfoCard>
+        <InfoCard title="Visibility & safety"><p className="body-sm">Contact details are controlled by BondBridge visibility settings and mutual professional connection approval.</p></InfoCard>
       </div>
-    </div>
+    </main>
   );
 }
+
+function InfoCard({ title, children }) { return <section className="card" style={{ padding: 24 }}><h2 className="heading-sm" style={{ marginBottom: 14 }}>{title}</h2>{children}</section>; }
+function Data({ label, value }) { return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, paddingBlock: 8, borderBottom: '1px solid var(--border)' }}><span className="body-sm">{label}</span><strong>{value || '—'}</strong></div>; }
+function TagList({ items, empty }) { return items.length ? <div className="profile-card-tags">{items.map((x) => <span className="tag" key={x}>{x}</span>)}</div> : <p className="body-sm">{empty}</p>; }

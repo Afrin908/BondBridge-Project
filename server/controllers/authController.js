@@ -110,13 +110,16 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (user && (await user.matchPassword(password))) {
       res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        photo: user.photo,
-        isAdmin: user.isAdmin,
-        token: generateToken(user._id),
-      });
+  _id: user._id,
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  photo: user.photo,
+  isAdmin: user.isAdmin,
+  isVerified: user.isVerified,
+  verificationStatus: user.verificationStatus,
+  token: generateToken(user),
+});
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
     }

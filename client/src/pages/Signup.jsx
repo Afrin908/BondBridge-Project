@@ -3,92 +3,305 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 
-const DecorElement = ({ style, className }) => (
-  <div style={style} className={className}></div>
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
 );
+
+const ShieldIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>
+);
+
+const leftPoints = [
+  'Identity-verified profiles only',
+  'End-to-end visibility controls',
+  'Collaboration intelligence engine',
+  'Admin-moderated trust & safety',
+  'Mutual-acceptance messaging',
+];
 
 export default function Signup() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name:'', email:'', password:'', confirmPassword:'', age:'', gender:'' });
-  const [error, setError] = useState('');
+
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    userType: 'employee',
+  });
+  const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleChange = (e) =>
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (form.password !== form.confirmPassword) return setError('Passwords do not match');
+    if (!form.name || !form.email || !form.password || !form.userType) {
+      setError('Please fill in all required fields.');
+      return;
+    }
     setLoading(true);
     try {
-      await register({ name: form.name, email: form.email, password: form.password, age: parseInt(form.age), gender: form.gender });
+      await register(form);
       navigate('/profile');
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed.');
-    } finally { setLoading(false); }
+      setError(err?.response?.data?.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-left">
-        <div style={{position:'relative',width:'280px',height:'280px',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'2rem'}}>
-          {/* Decorative elements */}
-          <DecorElement style={{position:'absolute',width:14,height:14,borderRadius:'50%',background:'#6AAEB4',top:20,left:30,animation:'float 3s ease-in-out infinite'}} />
-          <DecorElement style={{position:'absolute',width:10,height:10,borderRadius:'50%',background:'#4A8A92',top:40,right:50,animation:'float 4s ease-in-out infinite 0.5s'}} />
-          <DecorElement style={{position:'absolute',width:12,height:12,borderRadius:'50%',background:'#6AAEB4',bottom:30,left:40,animation:'float 3.5s ease-in-out infinite 1s'}} />
-          <DecorElement style={{position:'absolute',width:8,height:8,borderRadius:'50%',background:'#4A8A92',bottom:50,right:30,animation:'float 4.5s ease-in-out infinite 1.5s'}} />
-          <DecorElement style={{position:'absolute',width:16,height:16,top:10,right:20,color:'#6AAEB4',fontSize:24,animation:'float 3.8s ease-in-out infinite 0.2s'}}> + </DecorElement>
-          <DecorElement style={{position:'absolute',width:16,height:16,bottom:20,right:50,color:'#6AAEB4',fontSize:24,animation:'float 4.2s ease-in-out infinite 1.2s'}}> ✓ </DecorElement>
-          <DecorElement style={{position:'absolute',width:18,height:18,top:'50%',left:10,color:'#6AAEB4',fontSize:28,animation:'float 3.3s ease-in-out infinite 0.8s'}}> ◆ </DecorElement>
-          
-          {/* Logo */}
-          <img src={logo} alt="Matchmaking" style={{height:180,width:'auto',position:'relative',zIndex:1}} />
+    <div className="auth-layout">
+      {/* ── Left dark panel ──────────────────────────────── */}
+      <div className="auth-panel-left">
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            zIndex: 0,
+          }}
+        >
+          {[400, 240, 150].map((s, i) => (
+            <div
+              key={s}
+              style={{
+                position: 'absolute',
+                bottom: -s / 3,
+                right: -s / 3,
+                width: s,
+                height: s,
+                borderRadius: '50%',
+                border: `1px solid rgba(255,255,255,${0.03 + i * 0.01})`,
+              }}
+            />
+          ))}
         </div>
-        <div className="auth-brand" style={{fontSize:28}}>Matchmaking</div>
-        <p className="auth-brand-sub">Join thousands finding their perfect match today.</p>
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 48 }}>
+            <img src={logo} alt="BondBridge" style={{ height: 34, width: 'auto', filter: 'brightness(0) invert(1) opacity(0.9)' }} />
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 18,
+                color: 'rgba(245,245,243,0.9)',
+                letterSpacing: '-0.03em',
+              }}
+            >
+              BondBridge
+            </span>
+          </div>
+
+          <h2
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              color: 'var(--text-inverse)',
+              letterSpacing: '-0.03em',
+              lineHeight: 1.15,
+              marginBottom: 12,
+            }}
+          >
+            Join the Verified Network
+          </h2>
+
+          <p
+            style={{
+              fontSize: 14,
+              color: 'rgba(245,245,243,0.5)',
+              lineHeight: 1.65,
+              marginBottom: 40,
+              maxWidth: 340,
+            }}
+          >
+            Create your identity profile and access verified connections, visibility controls, and the full BondBridge platform.
+          </p>
+
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {leftPoints.map((pt) => (
+              <li
+                key={pt}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  fontSize: 13.5,
+                  color: 'rgba(245,245,243,0.65)',
+                }}
+              >
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: 'rgba(92,141,137,0.25)',
+                    border: '1px solid rgba(92,141,137,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <CheckIcon />
+                </div>
+                {pt}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            color: 'rgba(245,245,243,0.3)',
+            fontSize: 12,
+          }}
+        >
+          <ShieldIcon />
+          Identity-first. Trust-native. Visibility by design.
+        </div>
       </div>
-      <div className="auth-right">
-        <div className="auth-form">
-          <h1 className="auth-title">Sign Up</h1>
-          <p className="auth-sub">Create your account and start your journey.</p>
-          {error && <div className="alert alert-error">{error}</div>}
-          <form onSubmit={handleSubmit}>
+
+      {/* ── Right form panel ─────────────────────────────── */}
+      <div className="auth-panel-right" style={{ alignItems: 'flex-start', paddingTop: 80, overflowY: 'auto' }}>
+        <div style={{ width: '100%', maxWidth: 420 }} className="animate-fade-up">
+          <div style={{ marginBottom: 32 }}>
+            <h1
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: '-0.03em',
+                color: 'var(--text-primary)',
+                marginBottom: 8,
+              }}
+            >
+              Create your BondBridge account
+            </h1>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+              Already have an account?{' '}
+              <Link
+                to="/login"
+                style={{
+                  color: 'var(--accent)',
+                  fontWeight: 500,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
+
+          {error && (
+            <div className="alert alert-danger" style={{ marginBottom: 24 }}>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input className="form-input" name="name" value={form.name} onChange={handleChange} placeholder="Afrin Mahmud" required />
+              <label className="form-label" htmlFor="name">Full name</label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                className="form-input"
+                placeholder="Your full name"
+                value={form.name}
+                onChange={handleChange}
+                autoComplete="name"
+              />
             </div>
+
             <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input className="form-input" type="email" name="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required />
+              <label className="form-label" htmlFor="email">Email address</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="form-input"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={handleChange}
+                autoComplete="email"
+              />
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
-              <div className="form-group">
-                <label className="form-label">Age</label>
-                <input className="form-input" type="number" name="age" value={form.age} onChange={handleChange} placeholder="25" min="18" max="80" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Gender</label>
-                <select className="form-select" name="gender" value={form.gender} onChange={handleChange}>
-                  <option value="">Select</option>
-                  <option>Male</option><option>Female</option><option>Other</option>
-                </select>
-              </div>
-            </div>
+
             <div className="form-group">
-              <label className="form-label">Password</label>
-              <input className="form-input" type="password" name="password" value={form.password} onChange={handleChange} placeholder="••••••••" required minLength="6" />
+              <label className="form-label" htmlFor="password">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                className="form-input"
+                placeholder="Minimum 8 characters"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="new-password"
+                minLength={8}
+              />
             </div>
+
             <div className="form-group">
-              <label className="form-label">Confirm Password</label>
-              <input className="form-input" type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} placeholder="••••••••" required />
+              <label className="form-label" htmlFor="userType">Profile Type</label>
+              <select
+                id="userType"
+                name="userType"
+                required
+                className="form-select"
+                value={form.userType}
+                onChange={handleChange}
+              >
+                <option value="">Select profile type</option>
+                <option value="employee">Employee</option>
+                <option value="client">Client</option>
+                <option value="vendor">Vendor</option>
+                <option value="partner">Partner</option>
+                <option value="external">External collaborator</option>
+              </select>
             </div>
-            <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
-              {loading ? 'Creating Account...' : 'Create Account'}
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ height: 50, marginTop: 8, fontSize: 15, borderRadius: 'var(--radius-sm)' }}
+            >
+              {loading
+                ? <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                : 'Create Account'}
             </button>
           </form>
-          <p className="auth-link" style={{marginTop:'1.25rem'}}>
-            Already have an account? <Link to="/login">Log In</Link>
+
+          <p
+            style={{
+              marginTop: 20,
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              lineHeight: 1.6,
+              textAlign: 'center',
+            }}
+          >
+            By creating an account, you agree to BondBridge's Terms of Service
+            and Visibility Policy. Your identity data is handled securely.
           </p>
         </div>
       </div>

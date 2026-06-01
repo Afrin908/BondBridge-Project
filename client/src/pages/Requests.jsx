@@ -1,132 +1,68 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../utils/axios';
+import toast from 'react-hot-toast';
+import { TableSkeleton } from '../components/Skeletons';
 
-const Avatar = ({ name }) => (
-  <div className="request-avatar">
-    {name?.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2) || '?'}
-  </div>
-);
+const initials = (name) => (name || 'BB').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
 export default function Requests() {
   const [incoming, setIncoming] = useState([]);
   const [sent, setSent] = useState([]);
   const [tab, setTab] = useState('incoming');
   const [loading, setLoading] = useState(true);
-  const [acting, setActing] = useState({});
+  const [message, setMessage] = useState('');
+  const navigate = useNavigate();
 
-  const fetchAll = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const [inc, snt] = await Promise.all([
-        API.get('/match/requests'),
-        API.get('/match/sent'),
-      ]);
-      setIncoming(inc.data);
-      setSent(snt.data);
-    } catch {} finally { setLoading(false); }
+      const [inRes, sentRes] = await Promise.all([API.get('/match/requests'), API.get('/match/sent')]);
+      setIncoming(Array.isArray(inRes.data) ? inRes.data : inRes.data.requests || []);
+      setSent(Array.isArray(sentRes.data) ? sentRes.data : sentRes.data.sent || sentRes.data.requests || []);
+    } catch { toast.error('Connection requests could not be loaded.'); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { load(); }, []);
 
   const respond = async (matchId, status) => {
-    setActing(p => ({ ...p, [matchId]: status }));
-    try {
-      await API.put(`/match/${matchId}/respond`, { status });
-      setIncoming(p => p.filter(r => r._id !== matchId));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Action failed');
-    } finally { setActing(p => ({ ...p, [matchId]: null })); }
+    try { await API.put(`/match/${matchId}/respond`, { status }); toast.success(`Request ${status}.`); load(); }
+    catch (err) { toast.error(err.response?.data?.message || 'Request could not be updated.'); }
   };
 
-  const TabBtn = ({ id, label, count }) => (
-    <button
-      onClick={() => setTab(id)}
-      style={{
-        padding:'9px 18px', borderRadius:8, border:'none', cursor:'pointer',
-        fontFamily:'var(--font)', fontSize:14, fontWeight:500,
-        background: tab===id ? 'var(--teal)' : 'var(--white)',
-        color: tab===id ? 'white' : 'var(--gray-dark)',
-        border: tab===id ? 'none' : '1px solid var(--border)',
-      }}
-    >
-      {label} {count > 0 && <span style={{background:tab===id?'rgba(255,255,255,0.3)':'var(--teal-light)',color:tab===id?'white':'var(--teal-dark)',borderRadius:20,padding:'1px 7px',fontSize:11,marginLeft:4}}>{count}</span>}
-    </button>
-  );
+  const list = tab === 'incoming' ? incoming : sent;
 
   return (
-    <div className="page">
-      <h1 className="page-title">Match Requests</h1>
-      <p className="page-sub">Manage who wants to connect with you.</p>
-
-      <div style={{display:'flex',gap:8,marginBottom:'1.5rem'}}>
-        <TabBtn id="incoming" label="Incoming" count={incoming.length} />
-        <TabBtn id="sent" label="Sent" count={sent.length} />
-      </div>
-
-      {loading ? (
-        <div className="spinner"></div>
-      ) : tab === 'incoming' ? (
-        incoming.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📭</div>
-            <p style={{fontSize:16,fontWeight:500}}>No incoming requests</p>
-            <p style={{fontSize:13,marginTop:4,color:'var(--gray)'}}>When someone sends you a match request, it'll appear here.</p>
-          </div>
-        ) : (
-          <div>
-            {incoming.map(req => (
-              <div className="request-item" key={req._id}>
-                <Avatar name={req.sender?.name} />
-                <div className="request-info">
-                  <div className="request-name">{req.sender?.name}</div>
-                  <div className="request-meta">
-                    {[req.sender?.age && `${req.sender.age} yrs`, req.sender?.location, req.sender?.religion, req.sender?.gender].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-                <div className="request-actions">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => respond(req._id, 'accepted')}
-                    disabled={!!acting[req._id]}
-                  >
-                    {acting[req._id] === 'accepted' ? '...' : '✓ Accept'}
-                  </button>
-                  <button
-                    className="btn btn-danger btn-sm"
-                    onClick={() => respond(req._id, 'rejected')}
-                    disabled={!!acting[req._id]}
-                  >
-                    {acting[req._id] === 'rejected' ? '...' : '✕ Reject'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
+    <main className="page-wrapper container animate-fade-up">
+      <header className="page-header">
+        <span className="section-label">Network workflow</span>
+        <h1 className="heading-lg">Professional Connection Requests</h1>
+        <p className="body-md">Review incoming professional connection requests and track invitations you sent to employees, clients, and partners.</p>
+      </header>
+      
+      <div className="tabs"><button className={`tab-btn ${tab === 'incoming' ? 'active' : ''}`} onClick={() => setTab('incoming')}>Incoming</button><button className={`tab-btn ${tab === 'sent' ? 'active' : ''}`} onClick={() => setTab('sent')}>Sent</button></div>
+      {loading ? <TableSkeleton rows={5} /> : list.length === 0 ? (
+        <div className="empty-state card"><div className="empty-state-icon">BB</div><h2 className="heading-sm">No {tab} requests</h2><p className="body-sm">Professional connection requests will appear here.</p></div>
       ) : (
-        sent.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📤</div>
-            <p style={{fontSize:16,fontWeight:500}}>No sent requests</p>
-            <p style={{fontSize:13,marginTop:4,color:'var(--gray)'}}>Browse profiles and send match requests to get started.</p>
-          </div>
-        ) : (
-          <div>
-            {sent.map(req => (
-              <div className="request-item" key={req._id}>
-                <Avatar name={req.receiver?.name} />
-                <div className="request-info">
-                  <div className="request-name">{req.receiver?.name}</div>
-                  <div className="request-meta">
-                    {[req.receiver?.age && `${req.receiver.age} yrs`, req.receiver?.location, req.receiver?.religion].filter(Boolean).join(' · ')}
-                  </div>
+        <div style={{ display: 'grid', gap: 14 }}>
+          {list.map((req) => {
+            const person = tab === 'incoming' ? req.sender : req.receiver;
+            return (
+              <div className="request-card" key={req._id || req.matchId}>
+                <div className="avatar avatar-md">{person?.photo ? <img src={person.photo} alt={person.name} /> : initials(person?.name)}</div>
+                <div style={{ flex: 1 }}>
+                  <strong>{person?.name || 'BondBridge member'}</strong>
+                  <p className="body-sm">{[person?.roleTitle || person?.profession || person?.occupation, person?.department, person?.organization].filter(Boolean).join(' · ') || 'Professional profile'}</p>
                 </div>
-                <span className={`badge badge-${req.status}`} style={{textTransform:'capitalize'}}>{req.status}</span>
+                <span className={`tag ${req.status === 'accepted' ? 'tag-verified' : req.status === 'rejected' ? 'tag-danger' : 'tag-warning'}`}>{req.status || 'pending'}</span>
+                <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/user/${person?._id}`)}>View</button>
+                {tab === 'incoming' && (req.status || 'pending') === 'pending' && <><button className="btn btn-primary btn-sm" onClick={() => respond(req._id || req.matchId, 'accepted')}>Accept</button><button className="btn btn-danger btn-sm" onClick={() => respond(req._id || req.matchId, 'rejected')}>Reject</button></>}
               </div>
-            ))}
-          </div>
-        )
+            );
+          })}
+        </div>
       )}
-    </div>
+    </main>
   );
 }
